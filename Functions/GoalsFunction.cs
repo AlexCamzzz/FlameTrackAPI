@@ -1,25 +1,23 @@
 using System.Net;
-using FlameTrack.API.Extensions;
+using System.Text.Json;
 using FlameTrack.API.Models.DTOs;
 using FlameTrack.API.Services;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+using FlameTrack.API.Extensions;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FlameTrack.API.Functions;
 
 public class GoalsFunction
 {
-    private readonly ILogger<GoalsFunction> _logger;
+    private readonly ILogger _logger;
     private readonly IGoalService _goalService;
-    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public GoalsFunction(ILogger<GoalsFunction> logger, IGoalService goalService)
+    public GoalsFunction(ILoggerFactory loggerFactory, IGoalService goalService)
     {
-        _logger = logger;
+        _logger = loggerFactory.CreateLogger<GoalsFunction>();
         _goalService = goalService;
     }
 
@@ -30,7 +28,6 @@ public class GoalsFunction
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        _logger.LogInformation("C# HTTP trigger function processed a request for GetGoals.");
         var goals = await _goalService.GetAllAsync(userId);
         return new OkObjectResult(goals);
     }
@@ -42,43 +39,35 @@ public class GoalsFunction
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        _logger.LogInformation("C# HTTP trigger function processed a request for CreateGoal.");
-        
-        var data = await JsonSerializer.DeserializeAsync<CreateGoalRequestDto>(req.Body, _jsonOptions);
+        var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        var request = JsonSerializer.Deserialize<CreateGoalRequestDto>(requestBody, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-        if (data == null)
-        {
-            return new BadRequestObjectResult("Invalid goal data.");
-        }
+        if (request == null) return new BadRequestObjectResult(new { message = "Invalid request." });
 
-        var result = await _goalService.CreateAsync(data, userId);
-        return new OkObjectResult(result);
+        var goal = await _goalService.CreateAsync(request, userId);
+        return new OkObjectResult(goal);
     }
 
-    [Function("DepositGoal")]
-    public async Task<IActionResult> DepositGoal(
+    [Function("DepositToGoal")]
+    public async Task<IActionResult> DepositToGoal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "goals/{id}/deposit")] HttpRequestData req, string id)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        _logger.LogInformation("C# HTTP trigger function processed a request for DepositGoal.");
-        
-        var data = await JsonSerializer.DeserializeAsync<DepositGoalRequestDto>(req.Body, _jsonOptions);
+        var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        var request = JsonSerializer.Deserialize<DepositGoalRequestDto>(requestBody, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
-        if (data == null || data.Amount <= 0)
-        {
-            return new BadRequestObjectResult("Invalid deposit amount.");
-        }
+        if (request == null || request.Amount <= 0) return new BadRequestObjectResult(new { message = "Invalid deposit request." });
 
         try
         {
-            var result = await _goalService.DepositAsync(id, data.Amount, userId);
-            return new OkObjectResult(result);
+            var updatedGoal = await _goalService.DepositAsync(id, request, userId);
+            return new OkObjectResult(updatedGoal);
         }
         catch (Exception ex)
         {
-            return new NotFoundObjectResult(ex.Message);
+            return ex.ToActionResult(_logger);
         }
     }
 }

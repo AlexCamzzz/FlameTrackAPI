@@ -16,7 +16,7 @@ var host = new HostBuilder()
         var mongoConnectionString = context.Configuration["MongoDBConnectionString"];
         if (string.IsNullOrEmpty(mongoConnectionString))
         {
-            mongoConnectionString = "mongodb://localhost:27017"; // Fallback to avoid null exception
+            mongoConnectionString = "mongodb://127.0.0.1:27017"; // Fallback to avoid null exception
         }
 
         services.AddSingleton<IMongoClient>(new MongoClient(mongoConnectionString));
@@ -24,9 +24,12 @@ var host = new HostBuilder()
         // Services
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<ITransferService, TransferService>();
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddScoped<IBudgetService, BudgetService>();
         services.AddScoped<IGoalService, GoalService>();
+        services.AddScoped<IRecurringTransactionService, RecurringTransactionService>();
     })
     .Build();
 

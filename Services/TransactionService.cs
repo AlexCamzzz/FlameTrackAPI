@@ -9,6 +9,7 @@ public interface ITransactionService
     Task<List<TransactionDto>> GetAllAsync(string userId);
     Task<TransactionDto> CreateAsync(CreateTransactionRequestDto request, string userId);
     Task<DashboardSummaryDto> GetDashboardSummaryAsync(string userId);
+    Task DeleteAsync(string transactionId, string userId);
 }
 
 public class TransactionService : ITransactionService
@@ -16,13 +17,15 @@ public class TransactionService : ITransactionService
     private readonly IMongoCollection<TransactionEntity> _transactions;
     private readonly IMongoCollection<BudgetEntity> _budgets;
     private readonly IMongoCollection<GoalEntity> _goals;
+    private readonly IAccountService _accountService;
 
-    public TransactionService(IMongoClient mongoClient)
+    public TransactionService(IMongoClient mongoClient, IAccountService accountService)
     {
         var database = mongoClient.GetDatabase("FlameTrackDb");
         _transactions = database.GetCollection<TransactionEntity>("Transactions");
         _budgets = database.GetCollection<BudgetEntity>("Budgets");
         _goals = database.GetCollection<GoalEntity>("Goals");
+        _accountService = accountService;
     }
 
     public async Task<List<TransactionDto>> GetAllAsync(string userId)
@@ -33,9 +36,17 @@ public class TransactionService : ITransactionService
 
     public async Task<TransactionDto> CreateAsync(CreateTransactionRequestDto request, string userId)
     {
+        if (request.Amount <= 0)
+            throw new ArgumentException("Amount must be a positive vector.");
+
+        var accounts = await _accountService.GetAllAsync(userId);
+        if (!accounts.Any(a => a.Id == request.AccountId))
+            throw new Exception("Invalid Account ID.");
+
         var entity = new TransactionEntity
         {
             UserId = userId,
+            AccountId = request.AccountId,
             Description = request.Description,
             Amount = request.Amount,
             Date = request.Date,
@@ -44,15 +55,32 @@ public class TransactionService : ITransactionService
         };
 
         await _transactions.InsertOneAsync(entity);
+        
+        decimal delta = entity.Type == TransactionType.Income ? entity.Amount : -entity.Amount;
+        await _accountService.UpdateBalanceAsync(entity.AccountId, delta, userId);
+
         return MapToDto(entity);
+    }
+
+    public async Task DeleteAsync(string transactionId, string userId)
+    {
+        var filter = Builders<TransactionEntity>.Filter.Eq(t => t.Id, transactionId) & Builders<TransactionEntity>.Filter.Eq(t => t.UserId, userId);
+        var transaction = await _transactions.Find(filter).FirstOrDefaultAsync();
+
+        if (transaction == null) throw new Exception("Transaction not found.");
+
+        // Reverse balance
+        decimal delta = transaction.Type == TransactionType.Income ? -transaction.Amount : transaction.Amount;
+        await _accountService.UpdateBalanceAsync(transaction.AccountId, delta, userId);
+
+        await _transactions.DeleteOneAsync(filter);
     }
 
     public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(string userId)
     {
         var allTransactions = await _transactions.Find(t => t.UserId == userId).ToListAsync();
-        
-        var income = allTransactions.Where(t => t.Type == TransactionType.Income).Sum(t => t.Amount);
-        var expenses = allTransactions.Where(t => t.Type == TransactionType.Expense).Sum(t => t.Amount);
+        var allAccounts = await _accountService.GetAllAsync(userId);
+        var totalBalance = allAccounts.Sum(a => a.Balance);
         
         var currentMonth = DateTime.UtcNow.Month;
         var currentYear = DateTime.UtcNow.Year;
@@ -111,20 +139,22 @@ public class TransactionService : ITransactionService
 
         return new DashboardSummaryDto
         {
-            TotalBalance = income - expenses,
+            TotalBalance = totalBalance,
             MonthlyIncome = monthlyIncome,
             MonthlyExpenses = monthlyExpenses,
             SavingsRate = (double)(monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome * 100) : 0),
             RecentTransactions = recentTransactions,
             CategoryExpenses = categoryExpenses,
             Budgets = dashboardBudgets,
-            Goals = dashboardGoals
+            Goals = dashboardGoals,
+            Accounts = allAccounts
         };
     }
 
     private static TransactionDto MapToDto(TransactionEntity entity) => new()
     {
         Id = entity.Id ?? string.Empty,
+        AccountId = entity.AccountId,
         Description = entity.Description,
         Amount = entity.Amount,
         Date = entity.Date,

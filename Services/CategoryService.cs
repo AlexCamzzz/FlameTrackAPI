@@ -14,9 +14,11 @@ public interface ICategoryService
 public class CategoryService : ICategoryService
 {
     private readonly IMongoCollection<CategoryEntity> _categories;
+    private readonly IMongoClient _mongoClient;
 
     public CategoryService(IMongoClient mongoClient)
     {
+        _mongoClient = mongoClient;
         var database = mongoClient.GetDatabase("FlameTrackDb");
         _categories = database.GetCollection<CategoryEntity>("Categories");
         
@@ -34,7 +36,8 @@ public class CategoryService : ICategoryService
                 new CategoryEntity { Name = "Fixed", Color = "#4CAF50" },
                 new CategoryEntity { Name = "Travel", Color = "#FF5722" },
                 new CategoryEntity { Name = "Food", Color = "#F44336" }
-            };
+            }
+            .Select(c => { c.UserId = null; return c; }).ToList();
             _categories.InsertMany(standardCategories);
         }
     }
@@ -63,6 +66,18 @@ public class CategoryService : ICategoryService
 
     public async Task DeleteCategoryAsync(string categoryId, string userId)
     {
+        var db = _mongoClient.GetDatabase("FlameTrackDb");
+        
+        // Safety: Check if used in transactions
+        var txCount = await db.GetCollection<TransactionEntity>("Transactions")
+            .CountDocumentsAsync(t => t.CategoryId == categoryId && t.UserId == userId);
+        if (txCount > 0) throw new Exception("Cannot delete category used by transactions.");
+
+        // Safety: Check if used in budgets
+        var bgCount = await db.GetCollection<BudgetEntity>("Budgets")
+            .CountDocumentsAsync(b => b.CategoryId == categoryId && b.UserId == userId);
+        if (bgCount > 0) throw new Exception("Cannot delete category used by budgets.");
+
         var filter = Builders<CategoryEntity>.Filter.Eq(c => c.Id, categoryId) & Builders<CategoryEntity>.Filter.Eq(c => c.UserId, userId);
         await _categories.DeleteOneAsync(filter);
     }

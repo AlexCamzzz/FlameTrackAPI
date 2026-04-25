@@ -14,5 +14,6 @@ public class UserEntity
     public string? Nickname { get; set; }
     public string? Avatar { get; set; } // Base64 string
     public string PasswordHash { get; set; } = string.Empty;
+    public bool HasAcceptedTerms { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

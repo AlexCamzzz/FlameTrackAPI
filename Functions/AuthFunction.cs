@@ -39,7 +39,7 @@ public class AuthFunction
         }
         catch (Exception ex)
         {
-            return new BadRequestObjectResult(new { message = ex.Message });
+            return ex.ToActionResult(_logger);
         }
     }
 
@@ -59,7 +59,7 @@ public class AuthFunction
         }
         catch (Exception ex)
         {
-            return new UnauthorizedObjectResult(new { message = ex.Message });
+            return ex.ToActionResult(_logger, "Authentication sequence failed. Verify credentials.");
         }
     }
 
@@ -82,7 +82,45 @@ public class AuthFunction
         }
         catch (Exception ex)
         {
-            return new BadRequestObjectResult(new { message = ex.Message });
+            return ex.ToActionResult(_logger);
+        }
+    }
+
+    [Function("AcceptTerms")]
+    public async Task<IActionResult> AcceptTerms(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/accept-terms")] HttpRequestData req)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        try
+        {
+            var result = await _authService.AcceptTermsAsync(userId);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
+    }
+
+    [Function("DeleteAccount")]
+    public async Task<IActionResult> DeleteAccount(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "auth/profile")] HttpRequestData req)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        _logger.LogInformation($"C# HTTP trigger function processed account deletion for: {userId}");
+
+        try
+        {
+            await _authService.DeleteAccountAsync(userId);
+            return new NoContentResult();
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
         }
     }
 }

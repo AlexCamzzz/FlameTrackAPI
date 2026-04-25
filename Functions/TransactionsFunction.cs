@@ -66,4 +66,24 @@ public class TransactionsFunction
         var summary = await _transactionService.GetDashboardSummaryAsync(userId);
         return new OkObjectResult(summary);
     }
+
+    [Function("DeleteTransaction")]
+    public async Task<IActionResult> DeleteTransaction(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "transactions/{id}")] HttpRequestData req, string id)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        _logger.LogInformation($"C# HTTP trigger function processed a request for DeleteTransaction: {id}");
+        
+        try
+        {
+            await _transactionService.DeleteAsync(id, userId);
+            return new OkResult();
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
+    }
 }

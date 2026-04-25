@@ -8,17 +8,19 @@ public interface IGoalService
 {
     Task<List<GoalDto>> GetAllAsync(string userId);
     Task<GoalDto> CreateAsync(CreateGoalRequestDto request, string userId);
-    Task<GoalDto> DepositAsync(string goalId, decimal amount, string userId);
+    Task<GoalDto> DepositAsync(string goalId, DepositGoalRequestDto request, string userId);
 }
 
 public class GoalService : IGoalService
 {
     private readonly IMongoCollection<GoalEntity> _goals;
+    private readonly ITransactionService _transactionService;
 
-    public GoalService(IMongoClient mongoClient)
+    public GoalService(IMongoClient mongoClient, ITransactionService transactionService)
     {
         var database = mongoClient.GetDatabase("FlameTrackDb");
         _goals = database.GetCollection<GoalEntity>("Goals");
+        _transactionService = transactionService;
     }
 
     public async Task<List<GoalDto>> GetAllAsync(string userId)
@@ -34,7 +36,7 @@ public class GoalService : IGoalService
             UserId = userId,
             Name = request.Name,
             TargetAmount = request.TargetAmount,
-            CurrentAmount = request.CurrentAmount,
+            CurrentAmount = 0,
             Deadline = request.Deadline
         };
 
@@ -42,20 +44,32 @@ public class GoalService : IGoalService
         return MapToDto(entity);
     }
 
-    public async Task<GoalDto> DepositAsync(string goalId, decimal amount, string userId)
+    public async Task<GoalDto> DepositAsync(string goalId, DepositGoalRequestDto request, string userId)
     {
         var filter = Builders<GoalEntity>.Filter.Eq(g => g.Id, goalId) & Builders<GoalEntity>.Filter.Eq(g => g.UserId, userId);
-        var update = Builders<GoalEntity>.Update.Inc(g => g.CurrentAmount, amount);
-        
-        var updated = await _goals.FindOneAndUpdateAsync(
-            filter, 
-            update, 
-            new FindOneAndUpdateOptions<GoalEntity> { ReturnDocument = ReturnDocument.After }
-        );
+        var goal = await _goals.Find(filter).FirstOrDefaultAsync();
 
-        if (updated == null) throw new Exception("Goal not found");
+        if (goal == null) throw new Exception("Goal not found.");
 
-        return MapToDto(updated);
+        // Financially integrated deposit: Create a transaction
+        var txRequest = new CreateTransactionRequestDto
+        {
+            AccountId = request.FromAccountId,
+            Amount = request.Amount,
+            Description = $"Goal Deposit: {goal.Name}",
+            Date = DateTime.UtcNow,
+            CategoryId = "000000000000000000000000", 
+            Type = TransactionTypeDto.Expense
+        };
+
+        await _transactionService.CreateAsync(txRequest, userId);
+
+        // Update Goal progress
+        var update = Builders<GoalEntity>.Update.Inc(g => g.CurrentAmount, request.Amount);
+        await _goals.UpdateOneAsync(filter, update);
+
+        var updatedGoal = await _goals.Find(filter).FirstAsync();
+        return MapToDto(updatedGoal);
     }
 
     private static GoalDto MapToDto(GoalEntity entity) => new()

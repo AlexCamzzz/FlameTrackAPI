@@ -9,6 +9,8 @@ public enum TransactionTypeDto
 public class TransactionDto
 {
     public string Id { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string AccountId { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateTime Date { get; set; }
@@ -19,6 +21,7 @@ public class TransactionDto
 public class CreateTransactionRequestDto
 {
     public string Description { get; set; } = string.Empty;
+    public string AccountId { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public DateTime Date { get; set; }
     public string CategoryId { get; set; } = string.Empty;
@@ -35,6 +38,7 @@ public class DashboardSummaryDto
     public List<CategoryExpenseDto> CategoryExpenses { get; set; } = new();
     public List<DashboardBudgetDto> Budgets { get; set; } = new();
     public List<GoalDto> Goals { get; set; } = new();
+    public List<AccountDto> Accounts { get; set; } = new();
 }
 
 public class DashboardBudgetDto

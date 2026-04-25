@@ -26,6 +26,7 @@ public class UserDto
     public string Email { get; set; } = string.Empty;
     public string? Nickname { get; set; }
     public string? Avatar { get; set; }
+    public bool HasAcceptedTerms { get; set; }
 }
 
 public class UpdateUserRequestDto

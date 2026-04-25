@@ -1,4 +1,5 @@
 using System.Net;
+using FlameTrack.API.Extensions;
 using FlameTrack.API.Models.DTOs;
 using FlameTrack.API.Services;
 using Microsoft.AspNetCore.Http;
@@ -59,6 +60,29 @@ public class AuthFunction
         catch (Exception ex)
         {
             return new UnauthorizedObjectResult(new { message = ex.Message });
+        }
+    }
+
+    [Function("UpdateProfile")]
+    public async Task<IActionResult> UpdateProfile(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "auth/profile")] HttpRequestData req)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        _logger.LogInformation("C# HTTP trigger function processed a request for UpdateProfile.");
+        
+        try
+        {
+            var data = await JsonSerializer.DeserializeAsync<UpdateUserRequestDto>(req.Body, _jsonOptions);
+            if (data == null) return new BadRequestObjectResult("Invalid data.");
+
+            var result = await _authService.UpdateProfileAsync(userId, data);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return new BadRequestObjectResult(new { message = ex.Message });
         }
     }
 }

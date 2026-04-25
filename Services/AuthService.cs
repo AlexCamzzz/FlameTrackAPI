@@ -13,6 +13,7 @@ public interface IAuthService
 {
     Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request);
     Task<AuthResponseDto> LoginAsync(LoginRequestDto request);
+    Task<UserDto> UpdateProfileAsync(string userId, UpdateUserRequestDto request);
 }
 
 public class AuthService : IAuthService
@@ -24,8 +25,6 @@ public class AuthService : IAuthService
     {
         var database = mongoClient.GetDatabase("FlameTrackDb");
         _users = database.GetCollection<UserEntity>("Users");
-        
-        // Ensure a secret exists, fallback for local dev if missing
         _jwtSecret = config["JwtSecret"] ?? "flametrack_super_secret_key_1234567890_flametrack_web_secure_jwt";
     }
 
@@ -44,12 +43,10 @@ public class AuthService : IAuthService
 
         await _users.InsertOneAsync(user);
 
-        var token = GenerateJwtToken(user);
-
         return new AuthResponseDto
         {
-            Token = token,
-            User = new UserDto { Id = user.Id!, Name = user.Name, Email = user.Email }
+            Token = GenerateJwtToken(user),
+            User = MapToDto(user)
         };
     }
 
@@ -60,14 +57,42 @@ public class AuthService : IAuthService
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new Exception("Invalid credentials.");
 
-        var token = GenerateJwtToken(user);
-
         return new AuthResponseDto
         {
-            Token = token,
-            User = new UserDto { Id = user.Id!, Name = user.Name, Email = user.Email }
+            Token = GenerateJwtToken(user),
+            User = MapToDto(user)
         };
     }
+
+    public async Task<UserDto> UpdateProfileAsync(string userId, UpdateUserRequestDto request)
+    {
+        var filter = Builders<UserEntity>.Filter.Eq(u => u.Id, userId);
+        var update = Builders<UserEntity>.Update;
+        var updates = new List<UpdateDefinition<UserEntity>>();
+
+        if (request.Name != null) updates.Add(update.Set(u => u.Name, request.Name));
+        if (request.Nickname != null) updates.Add(update.Set(u => u.Nickname, request.Nickname));
+        if (request.Avatar != null) updates.Add(update.Set(u => u.Avatar, request.Avatar));
+
+        if (!updates.Any()) return MapToDto(await _users.Find(filter).FirstAsync());
+
+        var updatedUser = await _users.FindOneAndUpdateAsync(
+            filter, 
+            update.Combine(updates), 
+            new FindOneAndUpdateOptions<UserEntity> { ReturnDocument = ReturnDocument.After }
+        );
+
+        return MapToDto(updatedUser);
+    }
+
+    private UserDto MapToDto(UserEntity user) => new()
+    {
+        Id = user.Id!,
+        Name = user.Name,
+        Email = user.Email,
+        Nickname = user.Nickname,
+        Avatar = user.Avatar
+    };
 
     private string GenerateJwtToken(UserEntity user)
     {

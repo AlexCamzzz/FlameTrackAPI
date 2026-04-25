@@ -1,0 +1,8 @@
+bin/
+obj/
+local.settings.json
+.idea/
+.vscode/
+*.user
+*.suo
+*.sln.docstates

@@ -1,0 +1,6 @@
+@FlameTrack.API_HostAddress = http://localhost:5124
+
+GET {{FlameTrack.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

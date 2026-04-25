@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
+using Microsoft.Extensions.Logging;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
@@ -12,11 +13,21 @@ var host = new HostBuilder()
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
 
-        // MongoDB Configuration
+        // MongoDB Configuration - Strict for Production
         var mongoConnectionString = context.Configuration["MongoDBConnectionString"];
+        
         if (string.IsNullOrEmpty(mongoConnectionString))
         {
-            mongoConnectionString = "mongodb://127.0.0.1:27017"; // Fallback to avoid null exception
+            // Only use local fallback if not in production
+            if (context.HostingEnvironment.IsDevelopment())
+            {
+                mongoConnectionString = "mongodb://127.0.0.1:27017";
+            }
+            else 
+            {
+                // In Azure, we MUST have a connection string
+                throw new InvalidOperationException("MongoDBConnectionString is missing in Azure Environment Variables.");
+            }
         }
 
         services.AddSingleton<IMongoClient>(new MongoClient(mongoConnectionString));
@@ -34,4 +45,3 @@ var host = new HostBuilder()
     .Build();
 
 host.Run();
-

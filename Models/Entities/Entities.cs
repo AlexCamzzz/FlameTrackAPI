@@ -76,6 +76,12 @@ public class TransferEntity
     public DateTime Date { get; set; } = DateTime.UtcNow;
 }
 
+public enum BudgetFrequency
+{
+    Monthly,
+    Annual
+}
+
 public class BudgetEntity
 {
     [BsonId]
@@ -89,6 +95,7 @@ public class BudgetEntity
     public decimal Limit { get; set; }
     public int Month { get; set; }
     public int Year { get; set; }
+    public BudgetFrequency Frequency { get; set; } = BudgetFrequency.Monthly;
 }
 
 // Unified Tag/Category Entity

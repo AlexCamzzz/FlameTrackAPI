@@ -114,10 +114,27 @@ public class TransactionService : ITransactionService
             .OrderByDescending(x => x.Amount)
             .ToList();
 
-        var allBudgets = await _budgets.Find(b => b.UserId == userId && b.Month == currentMonth && b.Year == currentYear).ToListAsync();
+        var allBudgets = await _budgets.Find(b => b.UserId == userId).ToListAsync();
+        
+        // Use the common categoryExpensesMap for monthly spent calculations
+        // but need to calculate year-to-date spent for annual budgets
+        var yearExpensesMap = allTransactions
+            .Where(t => t.Date.Year == currentYear && t.Type == TransactionType.Expense)
+            .GroupBy(t => t.CategoryId)
+            .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
+
         var dashboardBudgets = allBudgets.Take(4).Select(b => 
         {
-            var spent = categoryExpensesMap.ContainsKey(b.CategoryId) ? categoryExpensesMap[b.CategoryId] : 0;
+            decimal spent = 0;
+            if (b.Frequency == BudgetFrequency.Monthly)
+            {
+                spent = categoryExpensesMap.ContainsKey(b.CategoryId) ? categoryExpensesMap[b.CategoryId] : 0;
+            }
+            else
+            {
+                spent = yearExpensesMap.ContainsKey(b.CategoryId) ? yearExpensesMap[b.CategoryId] : 0;
+            }
+
             return new DashboardBudgetDto
             {
                 CategoryId = b.CategoryId,

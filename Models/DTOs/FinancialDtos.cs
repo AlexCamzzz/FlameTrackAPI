@@ -10,6 +10,7 @@ public class BudgetDto
     public decimal Spent { get; set; }
     public int Month { get; set; }
     public int Year { get; set; }
+    public BudgetFrequency Frequency { get; set; }
 }
 
 public class CreateBudgetRequestDto
@@ -18,6 +19,7 @@ public class CreateBudgetRequestDto
     public decimal Limit { get; set; }
     public int Month { get; set; }
     public int Year { get; set; }
+    public BudgetFrequency Frequency { get; set; } = BudgetFrequency.Monthly;
 }
 
 public class GoalDto

@@ -6,7 +6,7 @@ namespace FlameTrack.API.Services;
 
 public interface ITransactionService
 {
-    Task<List<TransactionDto>> GetAllAsync(string userId);
+    Task<PaginatedResponseDto<TransactionDto>> GetAllAsync(string userId, int page = 1, int pageSize = 20);
     Task<TransactionDto> CreateAsync(CreateTransactionRequestDto request, string userId);
     Task<DashboardSummaryDto> GetDashboardSummaryAsync(string userId);
     Task DeleteAsync(string transactionId, string userId);
@@ -28,10 +28,24 @@ public class TransactionService : ITransactionService
         _accountService = accountService;
     }
 
-    public async Task<List<TransactionDto>> GetAllAsync(string userId)
+    public async Task<PaginatedResponseDto<TransactionDto>> GetAllAsync(string userId, int page = 1, int pageSize = 20)
     {
-        var entities = await _transactions.Find(t => t.UserId == userId).SortByDescending(t => t.Date).ToListAsync();
-        return entities.Select(MapToDto).ToList();
+        var filter = Builders<TransactionEntity>.Filter.Eq(t => t.UserId, userId);
+        var totalCount = (int)await _transactions.CountDocumentsAsync(filter);
+        
+        var entities = await _transactions.Find(filter)
+            .SortByDescending(t => t.Date)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync();
+
+        return new PaginatedResponseDto<TransactionDto>
+        {
+            Items = entities.Select(MapToDto).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
     }
 
     public async Task<TransactionDto> CreateAsync(CreateTransactionRequestDto request, string userId)

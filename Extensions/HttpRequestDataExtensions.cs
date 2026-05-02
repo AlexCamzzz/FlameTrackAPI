@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FlameTrack.API.Extensions;
@@ -15,10 +16,21 @@ public static class HttpRequestDataExtensions
         var headerValue = authHeaders.FirstOrDefault();
         if (headerValue == null || !headerValue.StartsWith("Bearer ")) return null;
 
-        var token = headerValue.Substring("Bearer ".Length).Trim();
-        var secret = Environment.GetEnvironmentVariable("JwtSecret");
+        return ValidateToken(headerValue.Substring("Bearer ".Length).Trim());
+    }
 
-        if (string.IsNullOrEmpty(secret)) return null; // No secret, no trust
+    public static string? GetUserId(this HttpRequest req)
+    {
+        string authHeader = req.Headers["Authorization"];
+        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ")) return null;
+
+        return ValidateToken(authHeader.Substring("Bearer ".Length).Trim());
+    }
+
+    private static string? ValidateToken(string token)
+    {
+        var secret = Environment.GetEnvironmentVariable("JwtSecret");
+        if (string.IsNullOrEmpty(secret)) return null;
 
         try
         {
@@ -29,8 +41,8 @@ public static class HttpRequestDataExtensions
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(key),
-                ValidateIssuer = false, // Ajustar en prod
-                ValidateAudience = false, // Ajustar en prod
+                ValidateIssuer = false,
+                ValidateAudience = false,
                 ClockSkew = TimeSpan.Zero
             };
 
@@ -41,7 +53,7 @@ public static class HttpRequestDataExtensions
         }
         catch
         {
-            return null; // Firma inválida o expirado
+            return null;
         }
     }
 }

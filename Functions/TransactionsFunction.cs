@@ -25,19 +25,26 @@ public class TransactionsFunction
 
     [Function("GetTransactions")]
     public async Task<IActionResult> GetTransactions(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "transactions")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "transactions")] HttpRequest req)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
         _logger.LogInformation("C# HTTP trigger function processed a request for GetTransactions.");
-        var transactions = await _transactionService.GetAllAsync(userId);
-        return new OkObjectResult(transactions);
+
+        int.TryParse(req.Query["page"], out int page);
+        int.TryParse(req.Query["pageSize"], out int pageSize);
+
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 20;
+
+        var result = await _transactionService.GetAllAsync(userId, page, pageSize);
+        return new OkObjectResult(result);
     }
 
     [Function("CreateTransaction")]
     public async Task<IActionResult> CreateTransaction(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "transactions")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "transactions")] HttpRequest req)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
@@ -57,7 +64,7 @@ public class TransactionsFunction
 
     [Function("GetDashboardSummary")]
     public async Task<IActionResult> GetDashboardSummary(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "dashboard/summary")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "dashboard/summary")] HttpRequest req)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
@@ -69,7 +76,7 @@ public class TransactionsFunction
 
     [Function("DeleteTransaction")]
     public async Task<IActionResult> DeleteTransaction(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "transactions/{id}")] HttpRequestData req, string id)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "transactions/{id}")] HttpRequest req, string id)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();

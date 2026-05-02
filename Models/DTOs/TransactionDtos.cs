@@ -55,3 +55,11 @@ public class CategoryExpenseDto
     public decimal Amount { get; set; }
     public double Percentage { get; set; }
 }
+
+public class PaginatedResponseDto<T>
+{
+    public List<T> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+}

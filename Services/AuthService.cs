@@ -14,6 +14,7 @@ public interface IAuthService
 {
     Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request);
     Task<AuthResponseDto> LoginAsync(LoginRequestDto request);
+    Task<AuthResponseDto> RefreshAsync(string refreshToken);
     Task<UserDto> UpdateProfileAsync(string userId, UpdateUserRequestDto request);
     Task<UserDto> AcceptTermsAsync(string userId);
     Task DeleteAccountAsync(string userId);
@@ -23,12 +24,14 @@ public class AuthService : IAuthService
 {
     private readonly IMongoDatabase _db;
     private readonly IMongoCollection<UserEntity> _users;
+    private readonly IMongoCollection<RefreshTokenEntity> _refreshTokens;
     private readonly string _jwtSecret;
 
     public AuthService(IMongoClient mongoClient, IConfiguration config)
     {
         _db = mongoClient.GetDatabase("FlameTrackDb");
         _users = _db.GetCollection<UserEntity>("Users");
+        _refreshTokens = _db.GetCollection<RefreshTokenEntity>("RefreshTokens");
         _jwtSecret = config["JwtSecret"] ?? throw new InvalidOperationException("JwtSecret is not configured.");
     }
 
@@ -47,10 +50,12 @@ public class AuthService : IAuthService
         };
 
         await _users.InsertOneAsync(user);
+        var refreshToken = await GenerateAndSaveRefreshToken(user.Id!);
 
         return new AuthResponseDto
         {
             Token = GenerateJwtToken(user),
+            RefreshToken = refreshToken,
             User = MapToDto(user)
         };
     }
@@ -62,11 +67,54 @@ public class AuthService : IAuthService
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new Exception("Invalid credentials.");
 
+        var refreshToken = await GenerateAndSaveRefreshToken(user.Id!);
+
         return new AuthResponseDto
         {
             Token = GenerateJwtToken(user),
+            RefreshToken = refreshToken,
             User = MapToDto(user)
         };
+    }
+
+    public async Task<AuthResponseDto> RefreshAsync(string refreshToken)
+    {
+        var tokenEntity = await _refreshTokens.Find(t => t.Token == refreshToken).FirstOrDefaultAsync();
+        
+        if (tokenEntity == null || !tokenEntity.IsActive)
+            throw new Exception("Invalid or expired refresh token.");
+
+        var user = await _users.Find(u => u.Id == tokenEntity.UserId).FirstOrDefaultAsync();
+        if (user == null) throw new Exception("User not found.");
+
+        // Revoke old token and generate new pair
+        await _refreshTokens.UpdateOneAsync(
+            t => t.Id == tokenEntity.Id, 
+            Builders<RefreshTokenEntity>.Update.Set(t => t.IsRevoked, true)
+        );
+
+        var newRefreshToken = await GenerateAndSaveRefreshToken(user.Id!);
+
+        return new AuthResponseDto
+        {
+            Token = GenerateJwtToken(user),
+            RefreshToken = newRefreshToken,
+            User = MapToDto(user)
+        };
+    }
+
+    private async Task<string> GenerateAndSaveRefreshToken(string userId)
+    {
+        var refreshToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+        var entity = new RefreshTokenEntity
+        {
+            UserId = userId,
+            Token = refreshToken,
+            ExpiresAt = DateTime.UtcNow.AddDays(7) // Refresh tokens last 7 days
+        };
+
+        await _refreshTokens.InsertOneAsync(entity);
+        return refreshToken;
     }
 
     public async Task<UserDto> UpdateProfileAsync(string userId, UpdateUserRequestDto request)

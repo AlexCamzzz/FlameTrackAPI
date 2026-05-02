@@ -8,6 +8,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FlameTrack.API.Functions;
 
@@ -24,8 +25,9 @@ public class AuthFunction
     }
 
     [Function("Register")]
+    [EnableRateLimiting("auth-limiter")]
     public async Task<IActionResult> Register(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/register")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/register")] HttpRequest req)
     {
         _logger.LogInformation("C# HTTP trigger function processed a request for Register.");
         
@@ -44,8 +46,9 @@ public class AuthFunction
     }
 
     [Function("Login")]
+    [EnableRateLimiting("auth-limiter")]
     public async Task<IActionResult> Login(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/login")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/login")] HttpRequest req)
     {
         _logger.LogInformation("C# HTTP trigger function processed a request for Login.");
         
@@ -63,9 +66,31 @@ public class AuthFunction
         }
     }
 
+    [Function("Refresh")]
+    [EnableRateLimiting("auth-limiter")]
+    public async Task<IActionResult> Refresh(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/refresh")] HttpRequest req)
+    {
+        _logger.LogInformation("C# HTTP trigger function processed a request for Refresh Token.");
+        
+        try
+        {
+            var data = await JsonSerializer.DeserializeAsync<RefreshTokenRequestDto>(req.Body, _jsonOptions);
+            if (data == null || string.IsNullOrEmpty(data.RefreshToken)) 
+                return new BadRequestObjectResult("Invalid refresh token request.");
+
+            var result = await _authService.RefreshAsync(data.RefreshToken);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return new UnauthorizedObjectResult(ex.Message);
+        }
+    }
+
     [Function("UpdateProfile")]
     public async Task<IActionResult> UpdateProfile(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "auth/profile")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "auth/profile")] HttpRequest req)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
@@ -88,7 +113,7 @@ public class AuthFunction
 
     [Function("AcceptTerms")]
     public async Task<IActionResult> AcceptTerms(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/accept-terms")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/accept-terms")] HttpRequest req)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
@@ -106,7 +131,7 @@ public class AuthFunction
 
     [Function("DeleteAccount")]
     public async Task<IActionResult> DeleteAccount(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "auth/profile")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "auth/profile")] HttpRequest req)
     {
         var userId = req.GetUserId();
         if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();

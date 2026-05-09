@@ -157,3 +157,26 @@ public class GoalEntity
     public decimal CurrentAmount { get; set; }
     public DateTime Deadline { get; set; }
 }
+
+public enum DebtType
+{
+    OwedToMe, // Someone owes me money
+    IOwe     // I owe someone money
+}
+
+public class DebtEntity
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? Id { get; set; }
+
+    public string UserId { get; set; } = string.Empty;
+    public string CreditorDebtor { get; set; } = string.Empty; // Person/Entity
+    public string Description { get; set; } = string.Empty;
+    public decimal TotalAmount { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public DateTime DueDate { get; set; }
+    public DebtType Type { get; set; }
+    public bool IsCleared { get; set; } = false;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

@@ -1,0 +1,61 @@
+using System.Net;
+using FlameTrack.API.Extensions;
+using FlameTrack.API.Models.DTOs;
+using FlameTrack.API.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Logging;
+using System.Text.Json;
+
+namespace FlameTrack.API.Functions;
+
+public class SandboxFunction
+{
+    private readonly ILogger<SandboxFunction> _logger;
+    private readonly ISandboxService _sandboxService;
+    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    public SandboxFunction(ILogger<SandboxFunction> logger, ISandboxService sandboxService)
+    {
+        _logger = logger;
+        _sandboxService = sandboxService;
+    }
+
+    [Function("GetSandbox")]
+    public async Task<IActionResult> GetSandbox(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sandbox/{year:int}/{month:int}")] HttpRequest req, int year, int month)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        _logger.LogInformation($"Retrieving sandbox for {year}/{month} for user {userId}");
+        var result = await _sandboxService.GetOrCreateAsync(month, year, userId);
+        return new OkObjectResult(result);
+    }
+
+    [Function("CreateSandboxMovement")]
+    public async Task<IActionResult> CreateSandboxMovement(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sandbox/{sandboxId}/movements")] HttpRequest req, string sandboxId)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        var data = await JsonSerializer.DeserializeAsync<CreateSandboxMovementRequest>(req.Body, _jsonOptions);
+        if (data == null) return new BadRequestObjectResult("Invalid movement data.");
+
+        var result = await _sandboxService.AddMovementAsync(sandboxId, data, userId);
+        return new OkObjectResult(result);
+    }
+
+    [Function("ResetSandbox")]
+    public async Task<IActionResult> ResetSandbox(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sandbox/{sandboxId}")] HttpRequest req, string sandboxId)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        await _sandboxService.ResetAsync(sandboxId, userId);
+        return new OkResult();
+    }
+}

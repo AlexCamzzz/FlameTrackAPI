@@ -180,3 +180,42 @@ public class DebtEntity
     public bool IsCleared { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class SandboxSnapshotEntity
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? Id { get; set; }
+
+    public string UserId { get; set; } = string.Empty;
+    public int Month { get; set; }
+    public int Year { get; set; }
+    
+    // Map of AccountId -> ProjectedBalance
+    public Dictionary<string, decimal> InitialBalances { get; set; } = new();
+    
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class SandboxMovementEntity
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? Id { get; set; }
+
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string SandboxId { get; set; } = string.Empty;
+
+    public string UserId { get; set; } = string.Empty;
+
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string AccountId { get; set; } = string.Empty;
+
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string CategoryId { get; set; } = string.Empty;
+
+    public string Description { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public TransactionType Type { get; set; }
+    public DateTime Date { get; set; } = DateTime.UtcNow;
+}

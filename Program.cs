@@ -72,6 +72,7 @@ var host = new HostBuilder()
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<IDebtService, DebtService>();
         services.AddScoped<IRecurringTransactionService, RecurringTransactionService>();
+        services.AddScoped<ISandboxService, SandboxService>();
     })
     .Build();
 

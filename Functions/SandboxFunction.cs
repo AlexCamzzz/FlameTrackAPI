@@ -26,64 +26,99 @@ public class SandboxFunction
     public async Task<IActionResult> GetSandbox(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "sandbox/{year:int}/{month:int}")] HttpRequest req, int year, int month)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        _logger.LogInformation($"Retrieving sandbox for {year}/{month} for user {userId}");
-        var result = await _sandboxService.GetOrCreateAsync(month, year, userId);
-        return new OkObjectResult(result);
+            _logger.LogInformation($"Retrieving sandbox for {year}/{month} for user {userId}");
+            var result = await _sandboxService.GetOrCreateAsync(month, year, userId);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 
     [Function("CreateSandboxMovement")]
     public async Task<IActionResult> CreateSandboxMovement(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sandbox/{sandboxId}/movements")] HttpRequest req, string sandboxId)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        var data = await JsonSerializer.DeserializeAsync<CreateSandboxMovementRequest>(req.Body, _jsonOptions);
-        if (data == null) return new BadRequestObjectResult("Invalid movement data.");
+            var data = await JsonSerializer.DeserializeAsync<CreateSandboxMovementRequest>(req.Body, _jsonOptions);
+            if (data == null) return new BadRequestObjectResult("Invalid movement data.");
 
-        var result = await _sandboxService.AddMovementAsync(sandboxId, data, userId);
-        return new OkObjectResult(result);
+            var result = await _sandboxService.AddMovementAsync(sandboxId, data, userId);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 
     [Function("ResetSandbox")]
     public async Task<IActionResult> ResetSandbox(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sandbox/{sandboxId}")] HttpRequest req, string sandboxId)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        await _sandboxService.ResetAsync(sandboxId, userId);
-        return new OkResult();
+            await _sandboxService.ResetAsync(sandboxId, userId);
+            return new OkResult();
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 
     [Function("DeleteSandboxMovement")]
     public async Task<IActionResult> DeleteSandboxMovement(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sandbox/movements/{movementId}")] HttpRequest req, string movementId)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        await _sandboxService.DeleteMovementAsync(movementId, userId);
-        return new OkResult();
+            await _sandboxService.DeleteMovementAsync(movementId, userId);
+            return new OkResult();
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 
     [Function("ToggleSandboxMovement")]
     public async Task<IActionResult> ToggleSandboxMovement(
         [HttpTrigger(AuthorizationLevel.Anonymous, "patch", Route = "sandbox/movements/{movementId}/toggle")] HttpRequest req, string movementId)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
-
-        var query = req.Query;
-        if (!query.ContainsKey("isIncluded") || !bool.TryParse(query["isIncluded"], out bool isIncluded))
+        try
         {
-            return new BadRequestObjectResult("Missing or invalid 'isIncluded' query parameter.");
-        }
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        var result = await _sandboxService.UpdateMovementInclusionAsync(movementId, isIncluded, userId);
-        return new OkObjectResult(result);
+            var query = req.Query;
+            if (!query.ContainsKey("isIncluded") || !bool.TryParse(query["isIncluded"], out bool isIncluded))
+            {
+                return new BadRequestObjectResult("Missing or invalid 'isIncluded' query parameter.");
+            }
+
+            var result = await _sandboxService.UpdateMovementInclusionAsync(movementId, isIncluded, userId);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 }

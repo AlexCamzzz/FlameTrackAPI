@@ -120,6 +120,7 @@ public class SandboxService : ISandboxService
             Amount = request.Amount,
             Type = request.Type,
             Date = DateTime.UtcNow,
+            ExpectedDate = request.ExpectedDate,
             IsIncludedInBalance = request.IsIncludedInBalance
         };
 
@@ -159,6 +160,7 @@ public class SandboxService : ISandboxService
         Amount = entity.Amount,
         Type = entity.Type,
         Date = entity.Date,
+        ExpectedDate = entity.ExpectedDate,
         IsIncludedInBalance = entity.IsIncludedInBalance
     };
 }

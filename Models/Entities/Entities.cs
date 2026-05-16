@@ -218,5 +218,6 @@ public class SandboxMovementEntity
     public decimal Amount { get; set; }
     public TransactionType Type { get; set; }
     public DateTime Date { get; set; } = DateTime.UtcNow;
+    public DateTime? ExpectedDate { get; set; }
     public bool IsIncludedInBalance { get; set; } = true;
 }

@@ -58,4 +58,32 @@ public class SandboxFunction
         await _sandboxService.ResetAsync(sandboxId, userId);
         return new OkResult();
     }
+
+    [Function("DeleteSandboxMovement")]
+    public async Task<IActionResult> DeleteSandboxMovement(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "sandbox/movements/{movementId}")] HttpRequest req, string movementId)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        await _sandboxService.DeleteMovementAsync(movementId, userId);
+        return new OkResult();
+    }
+
+    [Function("ToggleSandboxMovement")]
+    public async Task<IActionResult> ToggleSandboxMovement(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "patch", Route = "sandbox/movements/{movementId}/toggle")] HttpRequest req, string movementId)
+    {
+        var userId = req.GetUserId();
+        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+        var query = req.Query;
+        if (!query.ContainsKey("isIncluded") || !bool.TryParse(query["isIncluded"], out bool isIncluded))
+        {
+            return new BadRequestObjectResult("Missing or invalid 'isIncluded' query parameter.");
+        }
+
+        var result = await _sandboxService.UpdateMovementInclusionAsync(movementId, isIncluded, userId);
+        return new OkObjectResult(result);
+    }
 }

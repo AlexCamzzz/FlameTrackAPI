@@ -9,6 +9,8 @@ public interface ISandboxService
     Task<SandboxDto> GetOrCreateAsync(int month, int year, string userId);
     Task<SandboxMovementDto> AddMovementAsync(string sandboxId, CreateSandboxMovementRequest request, string userId);
     Task ResetAsync(string sandboxId, string userId);
+    Task DeleteMovementAsync(string movementId, string userId);
+    Task<SandboxMovementDto> UpdateMovementInclusionAsync(string movementId, bool isIncluded, string userId);
 }
 
 public class SandboxService : ISandboxService
@@ -49,6 +51,8 @@ public class SandboxService : ISandboxService
         dto.ProjectedTotalBalance = dto.InitialBalances.Values.Sum();
         foreach (var m in dto.Movements)
         {
+            if (!m.IsIncludedInBalance) continue;
+
             if (m.Type == TransactionType.Income) dto.ProjectedTotalBalance += m.Amount;
             else dto.ProjectedTotalBalance -= m.Amount;
         }
@@ -78,6 +82,7 @@ public class SandboxService : ISandboxService
             
             foreach (var m in prevMovements)
             {
+                if (!m.IsIncludedInBalance) continue;
                 if (!initialBalances.ContainsKey(m.AccountId)) initialBalances[m.AccountId] = 0;
                 
                 if (m.Type == TransactionType.Income) initialBalances[m.AccountId] += m.Amount;
@@ -114,7 +119,8 @@ public class SandboxService : ISandboxService
             Description = request.Description,
             Amount = request.Amount,
             Type = request.Type,
-            Date = DateTime.UtcNow // Future dates could be handled but UI suggests current entry
+            Date = DateTime.UtcNow,
+            IsIncludedInBalance = request.IsIncludedInBalance
         };
 
         await _movements.InsertOneAsync(movement);
@@ -127,6 +133,23 @@ public class SandboxService : ISandboxService
         await _snapshots.DeleteOneAsync(s => s.Id == sandboxId && s.UserId == userId);
     }
 
+    public async Task DeleteMovementAsync(string movementId, string userId)
+    {
+        await _movements.DeleteOneAsync(m => m.Id == movementId && m.UserId == userId);
+    }
+
+    public async Task<SandboxMovementDto> UpdateMovementInclusionAsync(string movementId, bool isIncluded, string userId)
+    {
+        var update = Builders<SandboxMovementEntity>.Update.Set(m => m.IsIncludedInBalance, isIncluded);
+        var result = await _movements.FindOneAndUpdateAsync(
+            m => m.Id == movementId && m.UserId == userId,
+            update,
+            new FindOneAndUpdateOptions<SandboxMovementEntity> { ReturnDocument = ReturnDocument.After }
+        );
+
+        return MapToDto(result);
+    }
+
     private SandboxMovementDto MapToDto(SandboxMovementEntity entity) => new()
     {
         Id = entity.Id,
@@ -135,6 +158,7 @@ public class SandboxService : ISandboxService
         Description = entity.Description,
         Amount = entity.Amount,
         Type = entity.Type,
-        Date = entity.Date
+        Date = entity.Date,
+        IsIncludedInBalance = entity.IsIncludedInBalance
     };
 }

@@ -21,6 +21,7 @@ public class SandboxMovementDto
     public decimal Amount { get; set; }
     public TransactionType Type { get; set; }
     public DateTime Date { get; set; }
+    public bool IsIncludedInBalance { get; set; }
 }
 
 public class CreateSandboxMovementRequest
@@ -30,6 +31,7 @@ public class CreateSandboxMovementRequest
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public TransactionType Type { get; set; }
+    public bool IsIncludedInBalance { get; set; } = true;
 }
 
 public class SandboxSummaryDto

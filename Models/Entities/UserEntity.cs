@@ -15,5 +15,6 @@ public class UserEntity
     public string? Avatar { get; set; } // Base64 string
     public string PasswordHash { get; set; } = string.Empty;
     public bool HasAcceptedTerms { get; set; } = false;
+    public string? AiApiKey { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

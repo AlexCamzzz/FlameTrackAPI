@@ -73,6 +73,8 @@ var host = new HostBuilder()
         services.AddScoped<IDebtService, DebtService>();
         services.AddScoped<IRecurringTransactionService, RecurringTransactionService>();
         services.AddScoped<ISandboxService, SandboxService>();
+        services.AddHttpClient();
+        services.AddScoped<IAiService, AiService>();
     })
     .Build();
 

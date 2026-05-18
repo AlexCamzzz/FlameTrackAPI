@@ -129,6 +129,7 @@ public class AuthService : IAuthService
         if (request.Name != null) updates.Add(update.Set(u => u.Name, request.Name));
         if (request.Nickname != null) updates.Add(update.Set(u => u.Nickname, request.Nickname));
         if (request.Avatar != null) updates.Add(update.Set(u => u.Avatar, request.Avatar));
+        if (request.AiApiKey != null) updates.Add(update.Set(u => u.AiApiKey, request.AiApiKey));
 
         if (!updates.Any()) return MapToDto(await _users.Find(filter).FirstAsync());
 
@@ -170,7 +171,8 @@ public class AuthService : IAuthService
         Email = user.Email,
         Nickname = user.Nickname,
         Avatar = user.Avatar,
-        HasAcceptedTerms = user.HasAcceptedTerms
+        HasAcceptedTerms = user.HasAcceptedTerms,
+        AiApiKey = user.AiApiKey
     };
 
     private string GenerateJwtToken(UserEntity user)

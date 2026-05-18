@@ -16,5 +16,6 @@ public class UserEntity
     public string PasswordHash { get; set; } = string.Empty;
     public bool HasAcceptedTerms { get; set; } = false;
     public string? AiApiKey { get; set; }
+    public string? AiProvider { get; set; } // "openai", "gemini", or "claude"
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -38,65 +38,120 @@ public class AiService : IAiService
             throw new Exception("User profile not found.");
 
         if (string.IsNullOrWhiteSpace(user.AiApiKey))
-            throw new Exception("Neural Link not active. Please provide your OpenAI API Key in Settings > Network.");
+            throw new Exception("Intelligence link not active. Please provide an API Key and select a provider in Settings > Network.");
 
-        _logger.LogInformation("Generating financial context for user {UserId}", userId);
+        var provider = (user.AiProvider ?? "openai").ToLower();
         var dashboard = await _transactionService.GetDashboardSummaryAsync(userId);
         
-        var context = new StringBuilder();
-        context.AppendLine("User Financial Context (Live Ledger):");
-        context.AppendLine($"- Total Balance: {dashboard.TotalBalance:N2}");
-        context.AppendLine($"- Monthly Income: {dashboard.MonthlyIncome:N2}");
-        context.AppendLine($"- Monthly Expenses: {dashboard.MonthlyExpenses:N2}");
-        context.AppendLine($"- Savings Rate: {dashboard.SavingsRate:F2}%");
+        var context = BuildContext(dashboard);
+        var systemPrompt = "You are the FlameTrack Neural Advisor. Provide strategic financial insights based on the provided ledger data. Be precise, professional, and use a terminal-inspired tone. Focus on actionable optimizations.";
+
+        return provider switch
+        {
+            "gemini" => await CallGeminiAsync(user.AiApiKey, systemPrompt, context, message),
+            "claude" => await CallClaudeAsync(user.AiApiKey, systemPrompt, context, message),
+            _ => await CallOpenAiAsync(user.AiApiKey, systemPrompt, context, message)
+        };
+    }
+
+    private string BuildContext(DashboardSummaryDto dashboard)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("User Financial Context (Live Ledger):");
+        sb.AppendLine($"- Total Balance: {dashboard.TotalBalance:N2}");
+        sb.AppendLine($"- Monthly Income: {dashboard.MonthlyIncome:N2}");
+        sb.AppendLine($"- Monthly Expenses: {dashboard.MonthlyExpenses:N2}");
+        sb.AppendLine($"- Savings Rate: {dashboard.SavingsRate:F2}%");
         
-        context.AppendLine("\nAccounts Status:");
+        sb.AppendLine("\nAccounts Status:");
         foreach (var account in dashboard.Accounts)
         {
-            context.AppendLine($"- {account.Name}: {account.Balance:N2} ({account.Type})");
+            sb.AppendLine($"- {account.Name}: {account.Balance:N2} ({account.Type})");
         }
 
-        context.AppendLine("\nSpending Intensity by Category (Current Month):");
+        sb.AppendLine("\nSpending Intensity by Category (Current Month):");
         foreach (var category in dashboard.CategoryExpenses.Take(5))
         {
-            context.AppendLine($"- CategoryID {category.CategoryId}: {category.Amount:N2} ({category.Percentage:F2}%)");
+            sb.AppendLine($"- CategoryID {category.CategoryId}: {category.Amount:N2} ({category.Percentage:F2}%)");
         }
+        return sb.ToString();
+    }
 
-        var promptPayload = new
+    private async Task<AiResponseDto> CallOpenAiAsync(string apiKey, string systemPrompt, string context, string userQuery)
+    {
+        var payload = new
         {
             model = "gpt-4o-mini",
             messages = new[]
             {
-                new { role = "system", content = "You are the FlameTrack Neural Advisor. Provide strategic financial insights based on the provided ledger data. Be precise, professional, and use a terminal-inspired tone. Focus on actionable optimizations." },
-                new { role = "user", content = $"{context}\n\nUser Query: {message}" }
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = $"{context}\n\nUser Query: {userQuery}" }
             },
             temperature = 0.7
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", user.AiApiKey.Trim());
-        request.Content = JsonContent.Create(promptPayload);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+        request.Content = JsonContent.Create(payload);
 
-        _logger.LogInformation("Dispatching request to OpenAI for user {UserId}", userId);
         var response = await _httpClient.SendAsync(request);
+        return await HandleResponseAsync(response, "OpenAI", root => 
+            root.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString());
+    }
+
+    private async Task<AiResponseDto> CallGeminiAsync(string apiKey, string systemPrompt, string context, string userQuery)
+    {
+        var payload = new
+        {
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = $"{systemPrompt}\n\n{context}\n\nUser Query: {userQuery}" } } }
+            },
+            generationConfig = new { temperature = 0.7 }
+        };
+
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey.Trim()}";
+        var response = await _httpClient.PostAsJsonAsync(url, payload);
         
+        return await HandleResponseAsync(response, "Gemini", root => 
+            root.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString());
+    }
+
+    private async Task<AiResponseDto> CallClaudeAsync(string apiKey, string systemPrompt, string context, string userQuery)
+    {
+        var payload = new
+        {
+            model = "claude-3-5-sonnet-20240620",
+            max_tokens = 1024,
+            system = systemPrompt,
+            messages = new[]
+            {
+                new { role = "user", content = $"{context}\n\nUser Query: {userQuery}" }
+            },
+            temperature = 0.7
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
+        request.Headers.Add("x-api-key", apiKey.Trim());
+        request.Headers.Add("anthropic-version", "2023-06-01");
+        request.Content = JsonContent.Create(payload);
+
+        var response = await _httpClient.SendAsync(request);
+        return await HandleResponseAsync(response, "Claude", root => 
+            root.GetProperty("content")[0].GetProperty("text").GetString());
+    }
+
+    private async Task<AiResponseDto> HandleResponseAsync(HttpResponseMessage response, string providerName, Func<JsonElement, string?> extractor)
+    {
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync();
-            _logger.LogError("OpenAI API Failure: {StatusCode} - {Error}", response.StatusCode, errorContent);
-            
-            // Extract cleaner error if possible
-            try {
-                var errorDoc = JsonDocument.Parse(errorContent);
-                var cleanMsg = errorDoc.RootElement.GetProperty("error").GetProperty("message").GetString();
-                throw new Exception($"OpenAI Intelligence Error: {cleanMsg}");
-            } catch {
-                throw new Exception($"OpenAI API reported a {response.StatusCode}. Verify your API key and quota.");
-            }
+            _logger.LogError("{Provider} API Failure: {StatusCode} - {Error}", providerName, response.StatusCode, errorContent);
+            throw new Exception($"{providerName} API Error: {response.StatusCode}. Verify your API key and quota.");
         }
 
         var result = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var aiText = result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+        var aiText = extractor(result);
 
         return new AiResponseDto { Response = aiText ?? "Signal lost. Could not decode neural response." };
     }

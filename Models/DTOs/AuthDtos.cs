@@ -34,6 +34,7 @@ public class UserDto
     public string? Avatar { get; set; }
     public bool HasAcceptedTerms { get; set; }
     public string? AiApiKey { get; set; }
+    public string? AiProvider { get; set; }
 }
 
 public class UpdateUserRequestDto
@@ -42,4 +43,5 @@ public class UpdateUserRequestDto
     public string? Nickname { get; set; }
     public string? Avatar { get; set; }
     public string? AiApiKey { get; set; }
+    public string? AiProvider { get; set; }
 }

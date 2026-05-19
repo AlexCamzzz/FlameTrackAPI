@@ -105,13 +105,18 @@ public class AiService : IAiService
         {
             contents = new[]
             {
-                new { role = "user", parts = new[] { new { text = $"{systemPrompt}\n\n{context}\n\nUser Query: {userQuery}" } } }
+                new { parts = new[] { new { text = $"{systemPrompt}\n\n{context}\n\nUser Query: {userQuery}" } } }
             },
             generationConfig = new { temperature = 0.7 }
         };
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey.Trim()}";
-        var response = await _httpClient.PostAsJsonAsync(url, payload);
+        var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+        
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Add("x-goog-api-key", apiKey.Trim());
+        request.Content = JsonContent.Create(payload);
+
+        var response = await _httpClient.SendAsync(request);
         
         return await HandleResponseAsync(response, "Gemini", root => 
         {

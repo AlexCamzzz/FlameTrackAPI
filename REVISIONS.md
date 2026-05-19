@@ -3,11 +3,11 @@
 ## Core Versions
 
 ### v1.6.0 - Neural Advisor
-- Added `AiApiKey` to `UserEntity` for per-user credential management.
-- Added `UpdateUserRequestDto` and `UserDto` updates to include `AiApiKey`.
-- Implemented `AiService` with logic to call OpenAI Chat Completions (gpt-4o-mini).
-- Implemented `AiFunction` with `POST /api/ai/ask`.
-- Integrated `AiService` with `TransactionService.GetDashboardSummaryAsync` to provide context for AI prompts.
+- Added `AiApiKey` and `AiProvider` to `UserEntity` for per-user credential management.
+- Refactored `AiService` to support OpenAI (ChatGPT), Google (Gemini), and Anthropic (Claude).
+- Implemented specific API protocols and prompt formats for each provider.
+- Integrated `AiService` with `TransactionService` for dashboard context.
+- Implemented robust error extraction and logging for third-party AI failures.
 
 ### v1.5.0 - Pocket Dimensions
 - Implementation of Sandbox universe for simulations.

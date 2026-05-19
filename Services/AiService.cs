@@ -114,7 +114,16 @@ public class AiService : IAiService
         var response = await _httpClient.PostAsJsonAsync(url, payload);
         
         return await HandleResponseAsync(response, "Gemini", root => 
-            root.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString());
+        {
+            if (!root.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+                return "Signal blocked. The neural core refused to respond based on safety protocols.";
+            
+            var candidate = candidates[0];
+            if (!candidate.TryGetProperty("content", out var content) || !content.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
+                return "Signal lost. Candidate contains no valid data.";
+
+            return parts[0].GetProperty("text").GetString();
+        });
     }
 
     private async Task<AiResponseDto> CallClaudeAsync(string apiKey, string systemPrompt, string context, string userQuery)
@@ -147,12 +156,28 @@ public class AiService : IAiService
         {
             var errorContent = await response.Content.ReadAsStringAsync();
             _logger.LogError("{Provider} API Failure: {StatusCode} - {Error}", providerName, response.StatusCode, errorContent);
-            throw new Exception($"{providerName} API Error: {response.StatusCode}. Verify your API key and quota.");
+            
+            string message = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Unauthorized => "Invalid API Key. Please check your settings.",
+                System.Net.HttpStatusCode.Forbidden => "API Key does not have permission to use this model.",
+                System.Net.HttpStatusCode.TooManyRequests => "Quota exceeded or rate limited. Try again later.",
+                _ => $"{providerName} API Error: {response.StatusCode}. Verify your configuration."
+            };
+            
+            throw new Exception(message);
         }
 
-        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var aiText = extractor(result);
-
-        return new AiResponseDto { Response = aiText ?? "Signal lost. Could not decode neural response." };
+        try 
+        {
+            var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var aiText = extractor(result);
+            return new AiResponseDto { Response = aiText ?? "Signal lost. Could not decode neural response." };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to parse {Provider} response", providerName);
+            throw new Exception($"Failed to decode response from {providerName}. Core desync detected.");
+        }
     }
 }

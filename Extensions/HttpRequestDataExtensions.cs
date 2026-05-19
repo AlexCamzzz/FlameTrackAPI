@@ -11,7 +11,7 @@ public static class HttpRequestDataExtensions
 {
     public static string? GetUserId(this HttpRequestData req)
     {
-        if (!req.Headers.TryGetValues("Authorization", out var authHeaders)) return null;
+        if (!req.Headers.TryGetValues("Authorization", out var authHeaders) || authHeaders == null) return null;
         
         var headerValue = authHeaders.FirstOrDefault();
         if (headerValue == null || !headerValue.StartsWith("Bearer ")) return null;
@@ -21,7 +21,7 @@ public static class HttpRequestDataExtensions
 
     public static string? GetUserId(this HttpRequest req)
     {
-        string authHeader = req.Headers["Authorization"];
+        string? authHeader = req.Headers["Authorization"];
         if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ")) return null;
 
         return ValidateToken(authHeader.Substring("Bearer ".Length).Trim());

@@ -110,7 +110,7 @@ public class AiService : IAiService
             generationConfig = new { temperature = 0.7 }
         };
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey.Trim()}";
+        var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={apiKey.Trim()}";
         
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Content = JsonContent.Create(payload);

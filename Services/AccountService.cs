@@ -11,16 +11,18 @@ public interface IAccountService
     Task<AccountDto> UpdateAsync(string accountId, UpdateAccountRequestDto request, string userId);
     Task ArchiveAsync(string accountId, string userId);
     Task UpdateBalanceAsync(string accountId, decimal delta, string userId);
+    Task ResyncAllBalancesAsync(string userId);
 }
 
 public class AccountService : IAccountService
 {
     private readonly IMongoCollection<AccountEntity> _accounts;
+    private readonly IMongoDatabase _database;
 
     public AccountService(IMongoClient mongoClient)
     {
-        var database = mongoClient.GetDatabase("FlameTrackDb");
-        _accounts = database.GetCollection<AccountEntity>("Accounts");
+        _database = mongoClient.GetDatabase("FlameTrackDb");
+        _accounts = _database.GetCollection<AccountEntity>("Accounts");
     }
 
     public async Task<List<AccountDto>> GetAllAsync(string userId)
@@ -78,6 +80,38 @@ public class AccountService : IAccountService
         var filter = Builders<AccountEntity>.Filter.Eq(a => a.Id, accountId) & Builders<AccountEntity>.Filter.Eq(a => a.UserId, userId);
         var update = Builders<AccountEntity>.Update.Inc(a => a.Balance, delta);
         await _accounts.UpdateOneAsync(filter, update);
+    }
+
+    public async Task ResyncAllBalancesAsync(string userId)
+    {
+        var accounts = await _accounts.Find(a => a.UserId == userId).ToListAsync();
+        var transactions = await _database.GetCollection<TransactionEntity>("Transactions").Find(t => t.UserId == userId).ToListAsync();
+        var transfers = await _database.GetCollection<TransferEntity>("Transfers").Find(t => t.UserId == userId).ToListAsync();
+
+        foreach (var account in accounts)
+        {
+            decimal newBalance = account.InitialBalance;
+
+            // Apply Transactions
+            var accountTransactions = transactions.Where(t => t.AccountId == account.Id);
+            foreach (var t in accountTransactions)
+            {
+                if (t.Type == TransactionType.Income) newBalance += t.Amount;
+                else newBalance -= t.Amount;
+            }
+
+            // Apply Transfers
+            var outTransfers = transfers.Where(t => t.FromAccountId == account.Id);
+            foreach (var t in outTransfers) newBalance -= t.Amount;
+
+            var inTransfers = transfers.Where(t => t.ToAccountId == account.Id);
+            foreach (var t in inTransfers) newBalance += t.Amount;
+
+            // Update Account Balance
+            var filter = Builders<AccountEntity>.Filter.Eq(a => a.Id, account.Id);
+            var update = Builders<AccountEntity>.Update.Set(a => a.Balance, newBalance);
+            await _accounts.UpdateOneAsync(filter, update);
+        }
     }
 
     private static AccountDto MapToDto(AccountEntity entity) => new()

@@ -27,49 +27,95 @@ public class AccountsFunction
     public async Task<IActionResult> GetAccounts(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "accounts")] HttpRequestData req)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        var accounts = await _accountService.GetAllAsync(userId);
-        return new OkObjectResult(accounts);
+            var accounts = await _accountService.GetAllAsync(userId);
+            return new OkObjectResult(accounts);
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 
     [Function("CreateAccount")]
     public async Task<IActionResult> CreateAccount(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "accounts")] HttpRequestData req)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        var data = await JsonSerializer.DeserializeAsync<CreateAccountRequestDto>(req.Body, _jsonOptions);
-        if (data == null) return new BadRequestObjectResult("Invalid data.");
+            var data = await JsonSerializer.DeserializeAsync<CreateAccountRequestDto>(req.Body, _jsonOptions);
+            if (data == null) return new BadRequestObjectResult("Invalid data.");
 
-        var result = await _accountService.CreateAsync(data, userId);
-        return new OkObjectResult(result);
+            var result = await _accountService.CreateAsync(data, userId);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 
     [Function("UpdateAccount")]
     public async Task<IActionResult> UpdateAccount(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "accounts/{id}")] HttpRequestData req, string id)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        var data = await JsonSerializer.DeserializeAsync<UpdateAccountRequestDto>(req.Body, _jsonOptions);
-        if (data == null) return new BadRequestObjectResult("Invalid data.");
+            var data = await JsonSerializer.DeserializeAsync<UpdateAccountRequestDto>(req.Body, _jsonOptions);
+            if (data == null) return new BadRequestObjectResult("Invalid data.");
 
-        var result = await _accountService.UpdateAsync(id, data, userId);
-        return new OkObjectResult(result);
+            var result = await _accountService.UpdateAsync(id, data, userId);
+            return new OkObjectResult(result);
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 
     [Function("ArchiveAccount")]
     public async Task<IActionResult> ArchiveAccount(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "accounts/{id}")] HttpRequestData req, string id)
     {
-        var userId = req.GetUserId();
-        if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-        await _accountService.ArchiveAsync(id, userId);
-        return new OkResult();
+            await _accountService.ArchiveAsync(id, userId);
+            return new OkResult();
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
+    }
+
+    [Function("ResyncBalances")]
+    public async Task<IActionResult> ResyncBalances(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "accounts/resync")] HttpRequest req)
+    {
+        try
+        {
+            var userId = req.GetUserId();
+            if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
+
+            await _accountService.ResyncAllBalancesAsync(userId);
+            return new OkResult();
+        }
+        catch (Exception ex)
+        {
+            return ex.ToActionResult(_logger);
+        }
     }
 }

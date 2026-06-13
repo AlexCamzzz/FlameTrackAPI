@@ -71,7 +71,9 @@ public class SandboxFunction
             var userId = req.GetUserId();
             if (string.IsNullOrEmpty(userId)) return new UnauthorizedResult();
 
-            await _sandboxService.ResetAsync(sandboxId, userId);
+            bool hardReset = req.Query.ContainsKey("hard") && bool.TryParse(req.Query["hard"], out bool hard) && hard;
+
+            await _sandboxService.ResetAsync(sandboxId, userId, hardReset);
             return new OkResult();
         }
         catch (Exception ex)

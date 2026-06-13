@@ -8,7 +8,7 @@ public interface ISandboxService
 {
     Task<SandboxDto> GetOrCreateAsync(int month, int year, string userId);
     Task<SandboxMovementDto> AddMovementAsync(string sandboxId, CreateSandboxMovementRequest request, string userId);
-    Task ResetAsync(string sandboxId, string userId);
+    Task ResetAsync(string sandboxId, string userId, bool hardReset = false);
     Task DeleteMovementAsync(string movementId, string userId);
     Task<SandboxMovementDto> UpdateMovementInclusionAsync(string movementId, bool isIncluded, string userId);
 }
@@ -60,38 +60,48 @@ public class SandboxService : ISandboxService
         return dto;
     }
 
-    private async Task<SandboxSnapshotEntity> CreateSnapshotAsync(int month, int year, string userId)
+    private async Task<SandboxSnapshotEntity> CreateSnapshotAsync(int month, int year, string userId, bool ignoreChain = false)
     {
-        // Try to chain from previous month
-        int prevMonth = month - 1;
-        int prevYear = year;
-        if (prevMonth == 0)
-        {
-            prevMonth = 12;
-            prevYear--;
-        }
-
-        var prevSnapshot = await _snapshots.Find(s => s.UserId == userId && s.Month == prevMonth && s.Year == prevYear).FirstOrDefaultAsync();
         Dictionary<string, decimal> initialBalances = new();
 
-        if (prevSnapshot != null)
+        if (!ignoreChain)
         {
-            // Calculate ending balance of previous month
-            var prevMovements = await _movements.Find(m => m.SandboxId == prevSnapshot.Id).ToListAsync();
-            initialBalances = new Dictionary<string, decimal>(prevSnapshot.InitialBalances);
-            
-            foreach (var m in prevMovements)
+            // Try to chain from previous month
+            int prevMonth = month - 1;
+            int prevYear = year;
+            if (prevMonth == 0)
             {
-                if (!m.IsIncludedInBalance) continue;
-                if (!initialBalances.ContainsKey(m.AccountId)) initialBalances[m.AccountId] = 0;
+                prevMonth = 12;
+                prevYear--;
+            }
+
+            var prevSnapshot = await _snapshots.Find(s => s.UserId == userId && s.Month == prevMonth && s.Year == prevYear).FirstOrDefaultAsync();
+
+            if (prevSnapshot != null)
+            {
+                // Calculate ending balance of previous month
+                var prevMovements = await _movements.Find(m => m.SandboxId == prevSnapshot.Id).ToListAsync();
+                initialBalances = new Dictionary<string, decimal>(prevSnapshot.InitialBalances);
                 
-                if (m.Type == TransactionType.Income) initialBalances[m.AccountId] += m.Amount;
-                else initialBalances[m.AccountId] -= m.Amount;
+                foreach (var m in prevMovements)
+                {
+                    if (!m.IsIncludedInBalance) continue;
+                    if (!initialBalances.ContainsKey(m.AccountId)) initialBalances[m.AccountId] = 0;
+                    
+                    if (m.Type == TransactionType.Income) initialBalances[m.AccountId] += m.Amount;
+                    else initialBalances[m.AccountId] -= m.Amount;
+                }
+            }
+            else
+            {
+                // Snapshot from real reality
+                var realAccounts = await _accounts.Find(a => a.UserId == userId && !a.IsArchived).ToListAsync();
+                initialBalances = realAccounts.ToDictionary(a => a.Id!, a => a.Balance);
             }
         }
         else
         {
-            // Snapshot from real reality
+            // Force snapshot from real reality
             var realAccounts = await _accounts.Find(a => a.UserId == userId && !a.IsArchived).ToListAsync();
             initialBalances = realAccounts.ToDictionary(a => a.Id!, a => a.Balance);
         }
@@ -128,10 +138,17 @@ public class SandboxService : ISandboxService
         return MapToDto(movement);
     }
 
-    public async Task ResetAsync(string sandboxId, string userId)
+    public async Task ResetAsync(string sandboxId, string userId, bool hardReset = false)
     {
+        var snapshot = await _snapshots.Find(s => s.Id == sandboxId && s.UserId == userId).FirstOrDefaultAsync();
+
         await _movements.DeleteManyAsync(m => m.SandboxId == sandboxId && m.UserId == userId);
         await _snapshots.DeleteOneAsync(s => s.Id == sandboxId && s.UserId == userId);
+
+        if (hardReset && snapshot != null)
+        {
+            await CreateSnapshotAsync(snapshot.Month, snapshot.Year, userId, true);
+        }
     }
 
     public async Task DeleteMovementAsync(string movementId, string userId)
